@@ -6,22 +6,26 @@ import time
 import httpx
 from typing import Any, cast
 
-# Try importing from mistralai — supports both old and new SDK versions
-try:
-    from mistralai import Mistral  # type: ignore[import]
-except ImportError:
-    raise ImportError("Please run: pip install mistralai --upgrade")
+# The current app calls the OCR REST endpoint directly via httpx, so a top-level
+# SDK client import is not required here. Newer mistralai releases may expose a
+# namespace package without `from mistralai import Mistral`, which would make the
+# app fail during startup even though the package is installed correctly.
 
-# DocumentURLChunk & ImageURLChunk: available directly in mistralai v1.5+
+# DocumentURLChunk & ImageURLChunk: try the most specific SDK path first, then
+# fall back to older public import locations.
 try:
-    from mistralai import DocumentURLChunk, ImageURLChunk  # type: ignore[import]
+    from mistralai.client.models import DocumentURLChunk, ImageURLChunk  # type: ignore[import]
     _USE_TYPED_CHUNKS = True
 except ImportError:
     try:
-        from mistralai.models import DocumentURLChunk, ImageURLChunk  # type: ignore[import]
+        from mistralai import DocumentURLChunk, ImageURLChunk  # type: ignore[import]
         _USE_TYPED_CHUNKS = True
     except ImportError:
-        _USE_TYPED_CHUNKS = False
+        try:
+            from mistralai.models import DocumentURLChunk, ImageURLChunk  # type: ignore[import]
+            _USE_TYPED_CHUNKS = True
+        except ImportError:
+            _USE_TYPED_CHUNKS = False
 
 
 def _make_document_url_chunk(url: str) -> Any:
