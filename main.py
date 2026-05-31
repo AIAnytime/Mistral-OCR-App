@@ -41,6 +41,10 @@ def _make_image_url_chunk(url: str) -> Any:
         return ImageURLChunk(image_url=url)  # type: ignore[call-arg]
     return {"type": "image_url", "image_url": url}
 
+def create_download_link(data: str, filetype: str, filename: str) -> None:
+    b64 = base64.b64encode(data.encode()).decode()
+    href = f'<a href="data:{filetype};base64,{b64}" download="{filename}">Download {filename}</a>'
+    st.markdown(href, unsafe_allow_html=True)
 
 def _chunk_to_dict(document: Any) -> dict:
     """Convert a typed chunk or plain dict to a JSON-serialisable dict."""
@@ -195,38 +199,194 @@ if st.button("Process"):
                         )
                     except Exception as e:
                         result_text = f"Error extracting result: {e}"
-
                     st.session_state["ocr_result"].append(result_text)
                     st.session_state["preview_src"].append(preview_src)
 
 # 5. Display Preview and OCR Results if available
 if st.session_state["ocr_result"]:
-    for idx, result in enumerate(st.session_state["ocr_result"]):
-        col1, col2 = st.columns(2)
-
+    for idx, result in enumerate(
+        st.session_state["ocr_result"]
+    ):
+        st.markdown(
+            """
+            <div style="
+                background: rgba(255,255,255,0.06);
+                backdrop-filter: blur(10px);
+                border-radius: 20px;
+                padding: 20px;
+                margin-bottom: 30px;
+                border: 1px solid rgba(255,255,255,0.08);
+                box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            ">
+            """,
+            unsafe_allow_html=True
+        )
+        col1, col2 = st.columns([1, 1])
+        # =====================================================
+        # LEFT PANEL → PREVIEW
+        # =====================================================
         with col1:
-            st.subheader(f"Input PDF {idx+1}")
+            st.markdown(
+                f"""
+                <h3 style="
+                    color:#93c5fd;
+                    font-weight:700;
+                ">
+                    📄 Input File {idx+1}
+                </h3>
+                """,
+                unsafe_allow_html=True
+            )
             if file_type == "PDF":
-                pdf_embed_html = f'<iframe src="{st.session_state["preview_src"][idx]}" width="100%" height="800" frameborder="0"></iframe>'
-                st.markdown(pdf_embed_html, unsafe_allow_html=True)
+                pdf_embed_html = f"""
+                <iframe
+                    src="{st.session_state["preview_src"][idx]}"
+                    width="100%"
+                    height="850"
+                    style="
+                        border-radius:16px;
+                        border:1px solid rgba(255,255,255,0.1);
+                    "
+                ></iframe>
+                """
+                st.markdown(
+                    pdf_embed_html,
+                    unsafe_allow_html=True
+                )
             else:
-                if source_type == "Local Upload" and st.session_state["image_bytes"]:
-                    st.image(st.session_state["image_bytes"][idx])
+                if (
+                    source_type == "Local Upload"
+                    and st.session_state["image_bytes"]
+                ):
+                    st.image(
+                        st.session_state["image_bytes"][idx],
+                        use_container_width=True
+                    )
                 else:
-                    st.image(st.session_state["preview_src"][idx])
-
+                    st.image(
+                        st.session_state["preview_src"][idx],
+                        use_container_width=True
+                    )
+        # =====================================================
+        # RIGHT PANEL → OCR RESULT
+        # =====================================================
         with col2:
-            st.subheader(f"Download OCR results {idx+1}")
+            st.markdown(
+                f"""
+                <h3 style="
+                    color:#c4b5fd;
+                    font-weight:700;
+                ">
+                     OCR Result {idx+1}
+                </h3>
+                """,
+                unsafe_allow_html=True
+            )
+            # ================= METRICS =================
+            word_count = len(result.split())
+            char_count = len(result)
+            m1, m2 = st.columns(2)
+            with m1:
+                st.metric(
+                    "📝 Words",
+                    word_count
+                )
+            with m2:
+                st.metric(
+                    "🔠 Characters",
+                    char_count
+                )
+            st.markdown("<br>", unsafe_allow_html=True)
 
-            def create_download_link(data: str, filetype: str, filename: str) -> None:
-                b64 = base64.b64encode(data.encode()).decode()
-                href = f'<a href="data:{filetype};base64,{b64}" download="{filename}">Download {filename}</a>'
-                st.markdown(href, unsafe_allow_html=True)
+            # ================= TABS =================
+            tab1, tab2, tab3 = st.tabs([
+                "✨ Rendered",
+                "📄 Raw Text",
+                "🧾 JSON"
+            ])
+            # ================= RENDERED =================
+            with tab1:
+                st.markdown(
+                    """
+                    <style>
+                    .scrollable-markdown {
+                        max-height: 700px;
+                        overflow-y: auto;
+                        padding: 18px;
+                        border-radius: 14px;
+                        border: 1px solid rgba(255,255,255,0.08);
+                    }
+                    .scrollable-markdown::-webkit-scrollbar {
+                        width: 8px;
+                    }
 
-            json_data = json.dumps({"ocr_result": result}, ensure_ascii=False, indent=2)
-            create_download_link(json_data, "application/json", f"Output_{idx+1}.json")  # json output
-            create_download_link(result, "text/plain", f"Output_{idx+1}.txt")            # plain text output
-            create_download_link(result, "text/markdown", f"Output_{idx+1}.md")          # markdown output
+                    .scrollable-markdown::-webkit-scrollbar-thumb {
+                        background: rgba(255,255,255,0.2);
+                        border-radius: 10px;
+                    }
 
-            # To preview results
-            st.write(st.session_state["ocr_result"])
+                    </style>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+                st.markdown(
+                    f"""
+                    <div class="scrollable-markdown">
+                        {result}
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+            # ================= RAW TEXT =================
+            with tab2:
+                st.text_area(
+                    "Raw OCR Output",
+                    result,
+                    height=700
+                )
+
+            # ================= JSON =================
+            with tab3:
+                json_data = json.dumps(
+                    {"ocr_result": result},
+                    ensure_ascii=False,
+                    indent=2
+                )
+                st.json(json.loads(json_data))
+            # ================= DOWNLOAD SECTION =================
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown(
+                """
+                <h4 style="
+                    color:#c4b5fd;
+                    font-weight:600;
+                ">
+                    Export Results
+                </h4>
+                """,
+                unsafe_allow_html=True
+            )
+            d1, d2, d3 = st.columns(3)
+            with d1:
+                create_download_link(
+                    json_data,
+                    "application/json",
+                    f"Output_{idx + 1}.json"
+                )
+            with d2:
+                create_download_link(
+                    result,
+                    "text/plain",
+                    f"Output_{idx + 1}.txt"
+                )
+            with d3:
+                create_download_link(
+                    result,
+                    "text/markdown",
+                    f"Output_{idx + 1}.md"
+                )
+        st.markdown(
+            "</div>",
+            unsafe_allow_html=True
+        )
